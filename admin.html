@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工单管理后台</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+    }
+
+    /* 登录页 */
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .login-box {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-box h1 {
+      text-align: center;
+      margin-bottom: 24px;
+      color: #333;
+    }
+
+    .login-box input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 16px;
+    }
+
+    .login-box input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .login-box button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .login-box button:hover {
+      opacity: 0.9;
+    }
+
+    .login-error {
+      background: #fee;
+      color: #c33;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+      font-size: 14px;
+    }
+
+    .login-error.show {
+      display: block;
+    }
+
+    /* 管理后台 */
+    .admin-container {
+      display: none;
+    }
+
+    .admin-container.show {
+      display: block;
+    }
+
+    .header {
+      background: white;
+      padding: 16px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      color: #333;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .user-info {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .logout-btn {
+      padding: 8px 16px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .logout-btn:hover {
+      background: #e0e0e0;
+    }
+
+    .main-content {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* 统计卡片 */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-card h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .stat-card.pending .value { color: #f59e0b; }
+    .stat-card.processing .value { color: #3b82f6; }
+    .stat-card.resolved .value { color: #10b981; }
+    .stat-card.total .value { color: #667eea; }
+
+    /* 筛选器 */
+    .filters {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-group label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .filter-group select,
+    .filter-group input {
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .filter-group select:focus,
+    .filter-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .refresh-btn {
+      padding: 8px 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-left: auto;
+    }
+
+    .refresh-btn:hover {
+      background: #5a6fd6;
+    }
+
+    /* 工单列表 */
+    .tickets-table {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #f8f9fa;
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .ticket-no {
+      font-family: monospace;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .ticket-title {
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      color: #333;
+    }
+
+    .ticket-title:hover {
+      color: #667eea;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-p0 { background: #fee2e2; color: #dc2626; }
+    .badge-p1 { background: #fed7aa; color: #ea580c; }
+    .badge-p2 { background: #fef3c7; color: #d97706; }
+    .badge-p3 { background: #d1fae5; color: #059669; }
+
+    .badge-pending { background: #fef3c7; color: #d97706; }
+    .badge-processing { background: #dbeafe; color: #2563eb; }
+    .badge-resolved { background: #d1fae5; color: #059669; }
+    .badge-closed { background: #f3f4f6; color: #6b7280; }
+
+    .action-btn {
+      padding: 6px 12px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .action-btn:hover {
+      background: #e0e0e0;
+    }
+
+    /* 详情弹窗 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 12px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h2 {
+      font-size: 18px;
+      color: #333;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+    }
+
+    .close-btn:hover {
+      color: #333;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .detail-row {
+      margin-bottom: 16px;
+    }
+
+    .detail-row label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .detail-row .value {
+      font-size: 15px;
+      color: #333;
+    }
+
+    .detail-row textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .detail-row select {
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .attachments-list {
+      list-style: none;
+    }
+
+    .attachments-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .attachments-list li:last-child {
+      border-bottom: none;
+    }
+
+    .attachments-list a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .attachments-list a:hover {
+      text-decoration: underline;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5a6fd6;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .main-content {
+        padding: 16px;
+      }
+
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .refresh-btn {
+        margin-left: 0;
+      }
+
+      .tickets-table {
+        overflow-x: auto;
+      }
+
+      table {
+        min-width: 800px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 登录页 -->
+  <div class="login-container" id="loginContainer">
+    <div class="login-box">
+      <h1>工单管理后台</h1>
+      <div class="login-error" id="loginError"></div>
+      <input type="email" id="loginEmail" placeholder="邮箱" value="">
+      <input type="password" id="loginPassword" placeholder="密码">
+      <button onclick="login()">登录</button>
+    </div>
+  </div>
+
+  <!-- 管理后台 -->
+  <div class="admin-container" id="adminContainer">
+    <div class="header">
+      <h1>工单管理后台</h1>
+      <div class="header-actions">
+        <span class="user-info" id="userInfo"></span>
+        <button class="logout-btn" onclick="logout()">退出登录</button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <!-- 统计卡片 -->
+      <div class="stats-grid">
+        <div class="stat-card total">
+          <h3>总工单数</h3>
+          <div class="value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card pending">
+          <h3>待处理</h3>
+          <div class="value" id="statPending">0</div>
+        </div>
+        <div class="stat-card processing">
+          <h3>处理中</h3>
+          <div class="value" id="statProcessing">0</div>
+        </div>
+        <div class="stat-card resolved">
+          <h3>已解决</h3>
+          <div class="value" id="statResolved">0</div>
+        </div>
+      </div>
+
+      <!-- 筛选器 -->
+      <div class="filters">
+        <div class="filter-group">
+          <label>状态：</label>
+          <select id="filterStatus" onchange="loadTickets()">
+            <option value="">全部</option>
+            <option value="待处理">待处理</option>
+            <option value="处理中">处理中</option>
+            <option value="已解决">已解决</option>
+            <option value="已关闭">已关闭</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>优先级：</label>
+          <select id="filterPriority" onchange="loadTickets()">
+            <option value="">全部</option>
+            <option value="P0-紧急">P0 紧急</option>
+            <option value="P1-高">P1 高</option>
+            <option value="P2-中">P2 中</option>
+            <option value="P3-低">P3 低</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>分类：</label>
+          <select id="filterCategory" onchange="loadTickets()">
+            <option value="">全部</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>搜索：</label>
+          <input type="text" id="filterSearch" placeholder="工单编号/标题" onkeyup="loadTickets()">
+        </div>
+        <button class="refresh-btn" onclick="loadTickets()">刷新</button>
+      </div>
+
+      <!-- 工单列表 -->
+      <div class="tickets-table">
+        <table>
+          <thead>
+            <tr>
+              <th>工单编号</th>
+              <th>标题</th>
+              <th>分类</th>
+              <th>优先级</th>
+              <th>状态</th>
+              <th>提交人</th>
+              <th>提交时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="ticketsBody">
+          </tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display: none;">
+          <div class="empty-state-icon">📭</div>
+          <div>暂无工单数据</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情弹窗 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>工单详情</h2>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveTicket()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 初始化 Supabase
+    const supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.URL, SUPABASE_CONFIG.ANON_KEY);
+
+    let currentSession = null;
+    let currentTicket = null;
+    let allTickets = [];
+
+    // 检查登录状态
+    async function checkSession() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        currentSession = session;
+        showAdmin();
+      }
+    }
+
+    // 登录
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const loginError = document.getElementById('loginError');
+
+      if (!email || !password) {
+        loginError.textContent = '请填写邮箱和密码';
+        loginError.classList.add('show');
+        return;
+      }
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
+
+      if (error) {
+        loginError.textContent = '登录失败：' + error.message;
+        loginError.classList.add('show');
+        return;
+      }
+
+      currentSession = data.session;
+      showAdmin();
+    }
+
+    // 显示管理后台
+    function showAdmin() {
+      document.getElementById('loginContainer').style.display = 'none';
+      document.getElementById('adminContainer').classList.add('show');
+      document.getElementById('userInfo').textContent = currentSession.user.email;
+      loadTickets();
+      loadCategories();
+    }
+
+    // 退出登录
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      currentSession = null;
+      document.getElementById('loginContainer').style.display = 'flex';
+      document.getElementById('adminContainer').classList.remove('show');
+    }
+
+    // 加载分类筛选器
+    async function loadCategories() {
+      const { data, error } = await supabaseClient
+        .from('category_history')
+        .select('name')
+        .order('usage_count', { ascending: false });
+
+      if (error) {
+        console.error('加载分类失败:', error);
+        return;
+      }
+
+      const select = document.getElementById('filterCategory');
+      data.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.name;
+        option.textContent = item.name;
+        select.appendChild(option);
+      });
+    }
+
+    // 加载工单列表
+    async function loadTickets() {
+      let query = supabaseClient
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // 应用筛选
+      const status = document.getElementById('filterStatus').value;
+      const priority = document.getElementById('filterPriority').value;
+      const category = document.getElementById('filterCategory').value;
+      const search = document.getElementById('filterSearch').value;
+
+      if (status) query = query.eq('status', status);
+      if (priority) query = query.eq('priority', priority);
+      if (category) query = query.eq('category', category);
+      if (search) {
+        query = query.or(`ticket_no.ilike.%${search}%,title.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('加载工单失败:', error);
+        alert('加载工单失败：' + error.message + (error.details ? '\n' + error.details : ''));
+        return;
+      }
+
+      allTickets = data;
+      renderTickets(data);
+      updateStats(data);
+    }
+
+    // 渲染工单列表
+    function renderTickets(tickets) {
+      const tbody = document.getElementById('ticketsBody');
+      const emptyState = document.getElementById('emptyState');
+
+      if (tickets.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      tbody.innerHTML = tickets.map(ticket => `
+        <tr>
+          <td><span class="ticket-no">${ticket.ticket_no}</span></td>
+          <td><span class="ticket-title" onclick="openModal(${ticket.id})">${ticket.title}</span></td>
+          <td>${ticket.category}</td>
+          <td><span class="badge badge-${getPriorityClass(ticket.priority)}">${ticket.priority}</span></td>
+          <td><span class="badge badge-${getStatusClass(ticket.status)}">${ticket.status}</span></td>
+          <td>${ticket.contact_email}</td>
+          <td>${formatDate(ticket.created_at)}</td>
+          <td><button class="action-btn" onclick="openModal(${ticket.id})">查看</button></td>
+        </tr>
+      `).join('');
+    }
+
+    // 更新统计
+    function updateStats(tickets) {
+      document.getElementById('statTotal').textContent = tickets.length;
+      document.getElementById('statPending').textContent = tickets.filter(t => t.status === '待处理').length;
+      document.getElementById('statProcessing').textContent = tickets.filter(t => t.status === '处理中').length;
+      document.getElementById('statResolved').textContent = tickets.filter(t => t.status === '已解决').length;
+    }
+
+    // 打开详情弹窗
+    async function openModal(ticketId) {
+      const ticket = allTickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+
+      currentTicket = ticket;
+
+      // 加载附件
+      const { data: attachments } = await supabaseClient
+        .from('attachments')
+        .select('*')
+        .eq('ticket_id', ticketId);
+
+      const modalBody = document.getElementById('modalBody');
+      modalBody.innerHTML = `
+        <div class="detail-row">
+          <label>工单编号</label>
+          <div class="value">${ticket.ticket_no}</div>
+        </div>
+        <div class="detail-row">
+          <label>标题</label>
+          <div class="value">${ticket.title}</div>
+        </div>
+        <div class="detail-row">
+          <label>问题描述</label>
+          <div class="value" style="white-space: pre-wrap;">${ticket.description}</div>
+        </div>
+        <div class="detail-row">
+          <label>分类</label>
+          <div class="value">${ticket.category}</div>
+        </div>
+        <div class="detail-row">
+          <label>优先级</label>
+          <div class="value"><span class="badge badge-${getPriorityClass(ticket.priority)}">${ticket.priority}</span></div>
+        </div>
+        <div class="detail-row">
+          <label>状态</label>
+          <select id="editStatus">
+            ${ADMIN_CONFIG.STATUS_OPTIONS.map(s =>
+              `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="detail-row">
+          <label>提交人邮箱</label>
+          <div class="value">${ticket.contact_email}</div>
+        </div>
+        ${ticket.contact_phone ? `
+        <div class="detail-row">
+          <label>联系方式</label>
+          <div class="value">${ticket.contact_phone}</div>
+        </div>
+        ` : ''}
+        <div class="detail-row">
+          <label>提交时间</label>
+          <div class="value">${formatDate(ticket.created_at)}</div>
+        </div>
+        ${attachments && attachments.length > 0 ? `
+        <div class="detail-row">
+          <label>附件</label>
+          <ul class="attachments-list">
+            ${attachments.map(a => `
+              <li><a href="${a.file_path}" target="_blank">${a.file_name}</a> (${formatFileSize(a.file_size)})</li>
+            `).join('')}
+          </ul>
+        </div>
+        ` : ''}
+        <div class="detail-row">
+          <label>处理备注</label>
+          <textarea id="editNotes" placeholder="添加处理备注...">${ticket.admin_notes || ''}</textarea>
+        </div>
+      `;
+
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    // 关闭弹窗
+    function closeModal() {
+      document.getElementById('modalOverlay').classList.remove('show');
+      currentTicket = null;
+    }
+
+    // 保存工单修改
+    async function saveTicket() {
+      if (!currentTicket) return;
+
+      const status = document.getElementById('editStatus').value;
+      const adminNotes = document.getElementById('editNotes').value;
+
+      const { error } = await supabaseClient
+        .from('tickets')
+        .update({
+          status: status,
+          admin_notes: adminNotes
+        })
+        .eq('id', currentTicket.id);
+
+      if (error) {
+        alert('保存失败：' + error.message);
+        return;
+      }
+
+      closeModal();
+      loadTickets();
+    }
+
+    // 辅助函数
+    function getPriorityClass(priority) {
+      if (priority.includes('P0')) return 'p0';
+      if (priority.includes('P1')) return 'p1';
+      if (priority.includes('P2')) return 'p2';
+      return 'p3';
+    }
+
+    function getStatusClass(status) {
+      if (status === '待处理') return 'pending';
+      if (status === '处理中') return 'processing';
+      if (status === '已解决') return 'resolved';
+      return 'closed';
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let i = 0;
+      while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+      }
+      return bytes.toFixed(1) + ' ' + units[i];
+    }
+
+    // 页面加载时检查登录状态
+    checkSession();
+
+    // 点击弹窗外部关闭
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+  </script>
+</body>
+</html>
